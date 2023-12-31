@@ -5,4 +5,4 @@ __pycache__
 day*.txt
 /zig-cache/
 /zig-out/
-/input/day1
+/input/day*
