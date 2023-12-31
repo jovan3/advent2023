@@ -2,4 +2,7 @@ inputs/day*
 *~
 *.pyc
 __pycache__
-day*
+day*.txt
+/zig-cache/
+/zig-out/
+/input/day1
