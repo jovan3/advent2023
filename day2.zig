@@ -91,8 +91,7 @@ fn process_line(line: []const u8) !Game {
 }
 
 pub fn main() !void {
-    const fileName = "day2.txt";
-    const file = try std.fs.cwd().openFile(fileName, .{});
+    const file = try std.fs.cwd().openFile("./input/day2", .{});
     defer file.close();
 
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
