@@ -31,8 +31,6 @@ const Schematics = struct {
         var x: u8 = 0;
         var y: u8 = 0;
         for (input) |char| {
-            std.debug.print("{s}", .{[_]u8{char}});
-
             cells[(y * file_lines) + x] = char;
             if (x < line_length) {
                 x += 1;
@@ -66,9 +64,8 @@ const Schematics = struct {
         }
     }
 
-    pub fn erase_around_symbols(self: *Schematics, allocator: std.mem.Allocator) !void {
+    pub fn locate_symbols(self: *Schematics, allocator: std.mem.Allocator) ![]Point {
         var symbol_points = std.ArrayList(Point).init(allocator);
-
         for (0..self.height) |grid_y| {
             for (0..self.width) |grid_x| {
                 const symbol = self.get(grid_x, grid_y);
@@ -80,7 +77,11 @@ const Schematics = struct {
             }
         }
 
-        for (symbol_points.items) |point| {
+        return symbol_points.items;
+    }
+
+    pub fn erase_around_symbols(self: *Schematics, points: []Point) !void {
+        for (points) |point| {
             const grid_x = point.x;
             const grid_y = point.y;
 
@@ -153,6 +154,23 @@ fn find_numbers(allocator: std.mem.Allocator, schematics: Schematics) ![]Number 
     return numbers.items;
 }
 
+fn find_asterisks(allocator: std.mem.Allocator, schematics: Schematics) ![]Point {
+    var points = std.ArrayList(Point).init(allocator);
+    for (0..schematics.height) |grid_y| {
+        for (0..schematics.width) |grid_x| {
+            var x: i32 = @intCast(grid_x);
+            var y: i32 = @intCast(grid_y);
+            var sc = schematics;
+            var symbol = sc.get(grid_x, grid_y);
+            if (symbol == '*') {
+                try points.append(.{ .x = x, .y = y });
+            }
+        }
+    }
+
+    return points.items;
+}
+
 fn read_file_into_buf(allocator: std.mem.Allocator, filename: []const u8) ![]u8 {
     const file = try std.fs.cwd().openFile(filename, .{});
     defer file.close();
@@ -162,18 +180,35 @@ fn read_file_into_buf(allocator: std.mem.Allocator, filename: []const u8) ![]u8 
     return read_buf;
 }
 
-pub fn main() !void {
-    const file_buf = try read_file_into_buf(std.heap.page_allocator, "./input/day3");
-    defer std.heap.page_allocator.free(file_buf);
+fn find_affected_numbers(allocator: std.mem.Allocator, before: []Number, after: []Number) ![]u32 {
+    var affected = std.ArrayList(u32).init(allocator);
 
-    var schematics = try Schematics.init(std.heap.page_allocator, file_buf);
+    for (before) |bf| {
+        var found = false;
+        for (after) |af| {
+            if (bf.grid_x == af.grid_x and bf.grid_y == af.grid_y and bf.representation == af.representation) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            try affected.append(bf.representation);
+        }
+    }
 
-    const numbers_before = try find_numbers(std.heap.page_allocator, schematics);
+    return affected.items;
+}
+
+fn part_1(file_buf: []u8, allocator: std.mem.Allocator) !void {
+    var schematics = try Schematics.init(allocator, file_buf);
+
+    const numbers_before = try find_numbers(allocator, schematics);
     schematics.print();
 
-    try schematics.erase_around_symbols(std.heap.page_allocator);
+    const erase_points = try schematics.locate_symbols(allocator);
+    try schematics.erase_around_symbols(erase_points);
     schematics.print();
-    const numbers_after = try find_numbers(std.heap.page_allocator, schematics);
+    const numbers_after = try find_numbers(allocator, schematics);
 
     var total: u32 = 0;
     for (numbers_before) |num_1| {
@@ -191,4 +226,36 @@ pub fn main() !void {
     std.debug.print("day 3 part 1: {d}\n", .{sum - total});
 
     defer schematics.deinit();
+}
+
+fn part_2(file_buf: []u8, allocator: std.mem.Allocator) !void {
+    var schematics = try Schematics.init(allocator, file_buf);
+    const numbers_before = try find_numbers(allocator, schematics);
+    const asterisks = try find_asterisks(allocator, schematics);
+
+    var sum: u32 = 0;
+    for (asterisks) |asterisk| {
+        var new_schematic = try Schematics.init(allocator, file_buf);
+        defer new_schematic.deinit();
+
+        var points = std.ArrayList(Point).init(allocator);
+        try points.append(asterisk);
+        try new_schematic.erase_around_symbols(points.items);
+        var numbers_after = try find_numbers(allocator, new_schematic);
+
+        const affected = try find_affected_numbers(allocator, numbers_before, numbers_after);
+        if (affected.len == 2) {
+            sum += affected[0] * affected[1];
+        }
+    }
+
+    std.debug.print("day 3 part 2: {d}\n", .{sum});
+}
+
+pub fn main() !void {
+    const file_buf = try read_file_into_buf(std.heap.page_allocator, "./input/day3");
+    defer std.heap.page_allocator.free(file_buf);
+
+    try part_1(file_buf, std.heap.page_allocator);
+    try part_2(file_buf, std.heap.page_allocator);
 }
